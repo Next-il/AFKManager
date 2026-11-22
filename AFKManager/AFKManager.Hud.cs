@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 
 namespace AFKManager;
@@ -34,6 +33,9 @@ public class AFKManagerHudConfig
 /// player's position and view with the timer's last sample ten times a second, the same X/Y test the timer
 /// makes, and shows "Back" as soon as they differ. The timer's own state is never touched: it resets the
 /// warnings at its next tick exactly as before.</para>
+///
+/// <para>All of the above is the warning ladder. With AfkMoveAfterSeconds and AfkMoveCountdownSeconds
+/// (the default) the move has its own clock in AFKManager.Move.cs, which drives the same card itself.</para>
 /// </summary>
 public partial class AFKManager
 {
@@ -44,10 +46,14 @@ public partial class AFKManager
 
     private bool HudOn => Config.Hud.Enabled && _hud is { Enabled: true };
 
-    /// <summary>The card replaces the warnings only for the move-to-spectators punishment.</summary>
-    private bool HudCountdowns => HudOn && Config.AfkPunishment == 1 && Config.AfkPunishAfterWarnings > 0;
+    /// <summary>
+    /// The card replaces the warnings only for the move-to-spectators punishment, and only while that runs
+    /// on the warnings. On the move clock (MoveClockOn) the clock feeds the card instead.
+    /// </summary>
+    private bool HudCountdowns => HudOn && Config.AfkPunishment == 1 && Config.AfkPunishAfterWarnings > 0 && !MoveClockOn;
 
-    /// <summary>A respawned player's sample is taken 0.2s after the spawn; until then it is the old position.</summary>
+    /// <summary>A respawned player's sample is taken 0.2s after the spawn; until then it is the old position.
+    /// The move clock uses the same window: a spawn puts the pawn somewhere new, which is not the player moving.</summary>
     private const float SpawnSampleSeconds = 0.3f;
 
     private void HudLoad()
@@ -60,9 +66,7 @@ public partial class AFKManager
 
         _hud = new AfkHud(this);
         _hud.Init();
-
-        if (_hud.Enabled)
-            AddTimer(0.1f, HudTick, TimerFlags.REPEAT);
+        // HudTick runs from FastTick (AFKManager.Move.cs), registered in Load
     }
 
     public override void OnAllPluginsLoaded(bool hotReload)

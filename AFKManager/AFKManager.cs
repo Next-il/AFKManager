@@ -15,6 +15,13 @@ public class AFKManagerConfig : BasePluginConfig
     public int AfkPunishAfterWarnings { get; set; } = 3;
     public int AfkPunishment { get; set; } = 1;
     public float AfkWarnInterval { get; set; } = 5.0f;
+
+    // AfkPunishment 1 on its own clock (AFKManager.Move.cs): this many seconds standing still, then a
+    // countdown of this many, then the move. Either at 0 brings back the AfkWarnInterval warnings for it.
+    // A config file without them gets these defaults.
+    public float AfkMoveAfterSeconds { get; set; } = 40.0f;
+    public float AfkMoveCountdownSeconds { get; set; } = 10.0f;
+
     public int AfkTransferC4AfterWarnings { get; set; } = 1;
     public bool AfkTransferC4OnlyFromBuyZone { get; set; } = true;
     public float SpecWarnInterval { get; set; } = 20.0f;
@@ -104,6 +111,17 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         // and when they last spawned (the position sample is retaken 0.2s later).
         public float IdleSince { get; set; }
         public float SpawnedAt { get; set; } = -1000;
+
+        // The move clock (AFKManager.Move.cs): seconds counted standing still, the sample it compares
+        // with (view X/Y, position X/Y), and the countdown it started.
+        public float StillSeconds { get; set; }
+        public bool StillSampled { get; set; }
+        public float StillAngX { get; set; }
+        public float StillAngY { get; set; }
+        public float StillOrgX { get; set; }
+        public float StillOrgY { get; set; }
+        public bool MoveCountdown { get; set; }
+        public float MoveDeadline { get; set; }
     }
     
     private readonly Dictionary<uint, PlayerInfo> _gPlayerInfo = new();
@@ -126,6 +144,8 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         {
             _gPlayerInfo.Clear();
             _hud?.Clear();
+            // Gone with the map; OnMapStart finds the new one. The timers skip while it is null.
+            _gGameRulesProxy = null;
         });
         
         #region OnClientConnected
@@ -179,6 +199,10 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         AddCommandListener("spec_next", OnCommandListener);
 
         HudLoad();
+
+        // The move clock and the HUD, ten times a second (AFKManager.Move.cs)
+        if (MoveClockOn || _hud is { Enabled: true })
+            AddTimer(0.1f, FastTick, TimerFlags.REPEAT);
     }
 
     private HookResult OnCommandListener(CCSPlayerController? player, CommandInfo commandInfo)
@@ -192,6 +216,7 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         data.SpecAfkTime = 0;
         data.SpecWarningCount = 0;
         data.AfkWarningCount = 0;
+        MoveClockReset(data);
         
         return HookResult.Continue;
     }
@@ -209,6 +234,7 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         value.SpecAfkTime = 0;
         value.SpecWarningCount = 0;
         value.AfkWarningCount = 0;
+        MoveClockReset(value);
                 
         if(@event.Team != 1)
             value.MovedByPlugin = false;
@@ -289,7 +315,11 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                 var origin = player.PlayerPawn.Value?.CBodyComponent?.SceneNode?.AbsOrigin;
                 
                 /*  ------------------------------------------->  <-------------------------------------------  */
-                if (Config.AfkPunishAfterWarnings != 0
+                if (MoveClockOn)
+                {
+                    // The move to spectators runs on its own clock (AFKManager.Move.cs), not on these warnings
+                }
+                else if (Config.AfkPunishAfterWarnings != 0
                     && !(Config.AfkSkipFlag.Count >= 1 && AdminManager.PlayerHasPermissions(player, Config.AfkSkipFlag.ToArray()))
                     && data.Angles.X == angles.X && data.Angles.Y == angles.Y
                     && data.Origin.X == origin.X && data.Origin.Y == origin.Y)
@@ -301,34 +331,7 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                     
                     if (Config.AfkTransferC4AfterWarnings != 0 && player.TeamNum == 2 && Config.AfkTransferC4AfterWarnings == data.AfkWarningCount &&
                         HasC4(player))
-                    {
-                        if (!Config.AfkTransferC4OnlyFromBuyZone || playerPawn.InBuyZone)
-                        {
-                            CCSPlayer_WeaponServices weaponService =
-                                new(player.PlayerPawn?.Value?.WeaponServices?.Handle ?? nint.Zero);
-                            CBasePlayerWeapon weapon =
-                                new(weaponService.MyWeapons.FirstOrDefault(w =>
-                                        w.IsValid && w.Value != null && w.Value.DesignerName == "weapon_c4")?.Value
-                                    ?.Handle ?? nint.Zero);
-
-                            if (weapon.IsValid)
-                            {
-                                var nearestPlayer = FindNearestPlayer(player);
-                                if (nearestPlayer != null)
-                                {
-                                    RemoveC4(weaponService, weapon);
-                                    nearestPlayer.GiveNamedItem("weapon_c4");
-                                    var bombLine = ReplaceVars(player,
-                                        Localizer["ChatBombTransfer"].Value
-                                            .Replace("{targetPlayerName}", nearestPlayer.PlayerName));
-
-                                    // A toast to the Terrorists when the HUD is on; the line to all otherwise
-                                    if (!HudBombToast(player, nearestPlayer, bombLine))
-                                        Server.PrintToChatAll(bombLine);
-                                }
-                            }
-                        }
-                    }
+                        TransferC4(player, playerPawn);
                     
                     if (data.AfkWarningCount == Config.AfkPunishAfterWarnings)
                     {
@@ -340,20 +343,7 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                                 
                                 break;
                             case 1:
-                                var moveLine = ReplaceVars(player, Localizer["ChatMoveMessage"].Value);
-                                var idleSeconds = IdleSeconds(data, Server.CurrentTime);
-
-                                if (!HudOn)
-                                    Server.PrintToChatAll(moveLine);
-
-                                playerPawn?.CommitSuicide(false, true);
-                                player.ChangeTeam(CsTeam.Spectator);
-                                data.MovedByPlugin = true;
-
-                                // After the team change, so its events can't take the new card down
-                                if (HudOn)
-                                    HudMoved(player, moveLine, idleSeconds);
-
+                                MoveToSpectators(player, data, playerPawn, IdleSeconds(data, Server.CurrentTime));
                                 break;
                             case 2:
                                 Server.PrintToChatAll(ReplaceVars(player, Localizer["ChatKickMessage"].Value));
@@ -399,7 +389,7 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                     HudBack(player);
                 }
                 /*  ------------------------------------------->  <-------------------------------------------  */
-                if (data.AfkWarningCount == 0 && Config.AntiCampPunishAfterWarnings != 0
+                if (!AfkWarned(data) && Config.AntiCampPunishAfterWarnings != 0
                                            && !(Config.AntiCampSkipBombPlanted && _gGameRulesProxy.BombPlanted)
                                            && !(Config.AntiCampSkipFlag.Count >= 1 && AdminManager.PlayerHasPermissions(player, Config.AntiCampSkipFlag.ToArray()))
                                            && player.TeamNum != Config.AntiCampSkipTeam)
@@ -496,6 +486,57 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         }
     }
     
+    /// <summary>Moves the player to spectators (AfkPunishment 1), for the warnings and for the move clock alike.</summary>
+    private void MoveToSpectators(CCSPlayerController player, PlayerInfo data, CCSPlayerPawn? playerPawn, int idleSeconds)
+    {
+        var moveLine = ReplaceVars(player, Localizer["ChatMoveMessage"].Value);
+
+        if (!HudOn)
+            Server.PrintToChatAll(moveLine);
+
+        playerPawn?.CommitSuicide(false, true);
+        player.ChangeTeam(CsTeam.Spectator);
+        data.MovedByPlugin = true;
+
+        // After the team change, so its events can't take the new card down
+        if (HudOn)
+            HudMoved(player, moveLine, idleSeconds);
+    }
+
+    /// <summary>Passes an AFK Terrorist's bomb to the nearest Terrorist who is not AFK.</summary>
+    private void TransferC4(CCSPlayerController player, CCSPlayerPawn? playerPawn)
+    {
+        if (Config.AfkTransferC4OnlyFromBuyZone && playerPawn is not { InBuyZone: true })
+            return;
+
+        CCSPlayer_WeaponServices weaponService =
+            new(player.PlayerPawn?.Value?.WeaponServices?.Handle ?? nint.Zero);
+        CBasePlayerWeapon weapon =
+            new(weaponService.MyWeapons.FirstOrDefault(w =>
+                    w.IsValid && w.Value != null && w.Value.DesignerName == "weapon_c4")?.Value
+                ?.Handle ?? nint.Zero);
+
+        if (!weapon.IsValid)
+            return;
+
+        var nearestPlayer = FindNearestPlayer(player);
+        if (nearestPlayer == null)
+            return;
+
+        RemoveC4(weaponService, weapon);
+        nearestPlayer.GiveNamedItem("weapon_c4");
+        var bombLine = ReplaceVars(player,
+            Localizer["ChatBombTransfer"].Value
+                .Replace("{targetPlayerName}", nearestPlayer.PlayerName));
+
+        // A toast to the Terrorists when the HUD is on; the line to all otherwise
+        if (!HudBombToast(player, nearestPlayer, bombLine))
+            Server.PrintToChatAll(bombLine);
+    }
+
+    /// <summary>Being counted down to a punishment: by the warnings, or by the move clock.</summary>
+    private static bool AfkWarned(PlayerInfo data) => data.AfkWarningCount > 0 || data.MoveCountdown;
+
     private static float CalculateDistance(Vector point1, Vector point2)
     {
         var dx = point2.X - point1.X;
@@ -542,8 +583,8 @@ public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         var players = Utilities.GetPlayers().Where(x => x is {TeamNum: 2, LifeState: (byte)LifeState_t.LIFE_ALIVE, PawnIsAlive: true }).ToList();
         foreach (var target in players)
         {
-            var outData = _gPlayerInfo[target.Index];
-            if (target.Index == player.Index || outData.AfkWarningCount > 0)
+            // TryGetValue: a bot has no entry, and the indexer threw on one
+            if (target.Index == player.Index || (_gPlayerInfo.TryGetValue(target.Index, out var outData) && AfkWarned(outData)))
                 continue;
             
             var distance = CalculateDistance(player.PlayerPawn?.Value?.CBodyComponent?.SceneNode?.AbsOrigin ?? new Vector(), target.PlayerPawn?.Value?.CBodyComponent?.SceneNode?.AbsOrigin ?? new Vector());

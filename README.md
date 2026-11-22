@@ -9,6 +9,8 @@ Config File located in **/addons/counterstrikesharp/configs/plugins/AFKManager**
   -	AfkPunishAfterWarnings: Number of warnings to issue before Punishment type (set to 0 to disable AFK feature).
   - AfkPunishment: Punishment type (0 - kill, 1 - kill + move to spectator, 2 - kick).
   - AfkWarnInterval: Issue a warning every X seconds for AFK.
+  - AfkMoveAfterSeconds: With AfkPunishment 1, seconds standing still before the move countdown starts (default = 40). Counted in real seconds, not in Timer steps.
+  - AfkMoveCountdownSeconds: With AfkPunishment 1, the countdown before the player is moved to spectators (default = 10). Set either key to 0 to use the AfkWarnInterval warnings for the move instead.
   - AfkTransferC4AfterWarnings: number of AFK warnings before transferring the C4 (default = 1,   0 = disabled)
   - AfkTransferC4OnlyFromBuyZone: C4 can only be transferred if the AFK player is in the Buy Zone. (default = true)
   - SpecWarnInterval: Issue a warning every X seconds for AFK at SPEC.
@@ -41,7 +43,12 @@ The layout is `hud/panorama/layout/custom_game/afk_hud.xml` with `afk_hud.css` a
 be in the workshop addon the clients mount; without it the card is invisible, so ship the addon first or set
 Hud.Enabled to false. The kill and kick punishments, the spectator kick and anti-camp keep their chat lines.
 
-Both Hud keys are optional - a config file without them gets the defaults, and the plugin never writes the file:
+With AfkMoveAfterSeconds and AfkMoveCountdownSeconds above 0 (40 and 10 by default) the move has its own clock: the card
+comes after 40 seconds standing still and counts the real 10 seconds down; nothing goes to chat while the HUD is on, and
+with it off the warning line comes once, when the countdown starts. Dead, freeze time, a skipped warmup, halftime and
+the end-of-match screen don't count, and the count goes on after them rather than starting over.
+
+These keys and both Hud keys are optional - a config file without them gets the defaults, and the plugin never writes the file:
 
 ```json
 "Hud": { "Enabled": true, "OthersToast": true }
