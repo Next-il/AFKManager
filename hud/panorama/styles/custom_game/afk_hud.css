@@ -1,0 +1,340 @@
+/*
+    afk_hud - the AFK card. Include hud_shared.vcss_c first.
+
+    Ported 1:1 from the approved preview (previews/more, tab "AFK and kicks": .al, .al-*, st-afk /
+    st-last / st-ok / st-moved). Sizes are 1080p pixels, the same numbers as the preview.
+
+    One card, private to the AFK player, lower middle under the crosshair. It slides up into place
+    with a fade and a blur, and leaves the same way when "show" comes off. The accent is gold while
+    the countdown runs, red for the last 3 seconds, green for "Back", grey for "Moved to spectators".
+
+    THE BAR is one linear clip transition, not a stepped ladder. The plugin picks where it starts
+    (at-N, in 5% steps, for a countdown that is picked up halfway, like after a respawn) with no
+    duration on, so it snaps there; a moment later it adds dur-N and "run" together and the client
+    drains it to 0 on its own. Clearing dur-N before "run" makes the reset snap instead of running
+    backwards - the same rule ToastService follows. clip survives the countdown label being
+    rewritten every second; width would not (runtime-behaviour.md).
+
+    UNVERIFIED IN GAME, each with a harmless failure:
+      - blur in transition-property: if blur does not animate, the card is simply sharp at once.
+      - @keyframes on the number (the last-3-seconds pop): without it the number just turns red.
+    All icons are CS2's own (icons/ui/*), tinted with wash-color. Nothing new ships in the addon.
+*/
+
+/* ------------------------------------------------------------------ root */
+
+/* Opened once per player and left open; the card carries its own "show". */
+.afk-root {
+    width: 100%;
+    height: 100%;
+    visibility: collapse;
+}
+.afk-root.show { visibility: visible; }
+
+/* ------------------------------------------------------------------ the card */
+
+.al {
+    horizontal-align: center;
+    vertical-align: top;
+    margin-top: 640px;
+    width: 352px;
+    border-top: 2px solid #f0a531;
+    world-blur: gaussian(8.0);
+    background-color: gradient(linear, 0% 0%, 0% 100%, from(#12171ee2), to(#0b0f14ec));
+
+    opacity: 0;
+    blur: gaussian(7.0);
+    transform: translateY(32px);
+    transition-property: opacity, transform, blur;
+    transition-duration: 0.3s, 0.34s, 0.3s;
+    transition-timing-function: ease-out, cubic-bezier( 0.2, 0.8, 0.25, 1.0 ), ease-out;
+}
+/* Entering is quicker than leaving: the transition on the state being entered is the one that plays. */
+.al.show {
+    opacity: 1;
+    blur: gaussian(0.0);
+    transform: translateY(0px);
+    transition-duration: 0.18s, 0.22s, 0.18s;
+}
+
+/* The row holds the padding, so the track below can run the card's full width at its bottom edge. */
+.al-row {
+    width: 100%;
+    flow-children: right;
+    padding: 9px 14px 11px 12px;
+}
+
+.al-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 11px;
+    vertical-align: center;
+    background-image: url("s2r://panorama/images/icons/ui/warning.vsvg");
+    background-size: 100% 100%;
+    /* The icons are 32x32 SVGs; rasterize at 2x the drawn size so 1440p and 4K stay sharp. */
+    background-texture-size: 40px 40px;
+    background-repeat: no-repeat;
+    wash-color: #f0a531;
+}
+
+.al-main {
+    width: fill-parent-flow(1.0);
+    flow-children: down;
+    vertical-align: center;
+}
+.al-eyebrow {
+    font-family: Stratum2 Mono;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1.6px;
+    color: #f0a531;
+    text-transform: uppercase;
+}
+.al-title {
+    font-family: Stratum2 Medium Condensed;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 0.2px;
+    line-height: 19.8px;
+    color: #ffffff;
+    margin-top: 1px;
+}
+.al-sub {
+    font-family: Stratum2 Regular;
+    font-size: 11.5px;
+    color: #9aa2ac;
+    margin-top: 2px;
+}
+
+/* Moved: "Press [M] to pick a team." */
+.al-keys {
+    flow-children: right;
+    margin-top: 2px;
+    visibility: collapse;
+}
+.al-keytxt {
+    font-family: Stratum2 Regular;
+    font-size: 11.5px;
+    color: #9aa2ac;
+    vertical-align: center;
+}
+/* The preview's 1px margin plus the word spaces around the key, which a Label next to a Label does not have. */
+.al-key {
+    font-family: Stratum2 Mono;
+    font-size: 9px;
+    font-weight: bold;
+    color: #14181d;
+    background-color: #d7dce1;
+    min-width: 15px;
+    height: 15px;
+    line-height: 15px;
+    padding: 0px 4px;
+    margin: 0px 4px;
+    text-align: center;
+    vertical-align: center;
+}
+
+/* The countdown: a big number and a small "s" on its baseline. */
+.al-num {
+    flow-children: right;
+    vertical-align: center;
+    margin-left: 11px;
+}
+.al-n {
+    font-family: Stratum2 Medium Condensed;
+    font-size: 30px;
+    font-weight: bold;
+    line-height: 27px;
+    min-width: 32px;
+    text-align: right;
+    color: #f0a531;
+}
+/* "Stratum2 Medium Condensed" at normal weight is the preview's 600. */
+.al-s {
+    font-family: Stratum2 Medium Condensed;
+    font-size: 13px;
+    color: #6c747d;
+    vertical-align: bottom;
+    margin-left: 1px;
+    margin-bottom: 1px;
+}
+
+/* Restarts by swapping between two names: removing and re-adding one in a tick sends nothing. */
+@keyframes 'al-pop-a' { 0% { transform: scale3d(1.18, 1.18, 1.0); } 100% { transform: scale3d(1.0, 1.0, 1.0); } }
+@keyframes 'al-pop-b' { 0% { transform: scale3d(1.18, 1.18, 1.0); } 100% { transform: scale3d(1.0, 1.0, 1.0); } }
+.al-n.pop-a {
+    animation-name: al-pop-a;
+    animation-duration: 0.45s;
+    animation-timing-function: ease-out;
+    animation-iteration-count: 1;
+}
+.al-n.pop-b {
+    animation-name: al-pop-b;
+    animation-duration: 0.45s;
+    animation-timing-function: ease-out;
+    animation-iteration-count: 1;
+}
+
+/* ------------------------------------------------------------------ the bar */
+
+.al-track {
+    width: 100%;
+    height: 2px;
+    vertical-align: bottom;
+}
+/* Zero by default, so taking "run" and the dur-N class off snaps it back instead of animating. */
+.al-bar {
+    width: 100%;
+    height: 100%;
+    background-color: #f0a531;
+    clip: rect( 0%, 100%, 100%, 0% );
+    transition-property: clip;
+    transition-duration: 0.0s;
+    transition-timing-function: linear;
+}
+
+/* Where it starts. */
+.al-bar.at-0 { clip: rect( 0%, 0%, 100%, 0% ); }
+.al-bar.at-1 { clip: rect( 0%, 5%, 100%, 0% ); }
+.al-bar.at-2 { clip: rect( 0%, 10%, 100%, 0% ); }
+.al-bar.at-3 { clip: rect( 0%, 15%, 100%, 0% ); }
+.al-bar.at-4 { clip: rect( 0%, 20%, 100%, 0% ); }
+.al-bar.at-5 { clip: rect( 0%, 25%, 100%, 0% ); }
+.al-bar.at-6 { clip: rect( 0%, 30%, 100%, 0% ); }
+.al-bar.at-7 { clip: rect( 0%, 35%, 100%, 0% ); }
+.al-bar.at-8 { clip: rect( 0%, 40%, 100%, 0% ); }
+.al-bar.at-9 { clip: rect( 0%, 45%, 100%, 0% ); }
+.al-bar.at-10 { clip: rect( 0%, 50%, 100%, 0% ); }
+.al-bar.at-11 { clip: rect( 0%, 55%, 100%, 0% ); }
+.al-bar.at-12 { clip: rect( 0%, 60%, 100%, 0% ); }
+.al-bar.at-13 { clip: rect( 0%, 65%, 100%, 0% ); }
+.al-bar.at-14 { clip: rect( 0%, 70%, 100%, 0% ); }
+.al-bar.at-15 { clip: rect( 0%, 75%, 100%, 0% ); }
+.al-bar.at-16 { clip: rect( 0%, 80%, 100%, 0% ); }
+.al-bar.at-17 { clip: rect( 0%, 85%, 100%, 0% ); }
+.al-bar.at-18 { clip: rect( 0%, 90%, 100%, 0% ); }
+.al-bar.at-19 { clip: rect( 0%, 95%, 100%, 0% ); }
+.al-bar.at-20 { clip: rect( 0%, 100%, 100%, 0% ); }
+
+/* How long it drains for: every second to 60, then every 5 to 180. The plugin snaps to the nearest. */
+.al-bar.dur-1 { transition-duration: 1.0s; }
+.al-bar.dur-2 { transition-duration: 2.0s; }
+.al-bar.dur-3 { transition-duration: 3.0s; }
+.al-bar.dur-4 { transition-duration: 4.0s; }
+.al-bar.dur-5 { transition-duration: 5.0s; }
+.al-bar.dur-6 { transition-duration: 6.0s; }
+.al-bar.dur-7 { transition-duration: 7.0s; }
+.al-bar.dur-8 { transition-duration: 8.0s; }
+.al-bar.dur-9 { transition-duration: 9.0s; }
+.al-bar.dur-10 { transition-duration: 10.0s; }
+.al-bar.dur-11 { transition-duration: 11.0s; }
+.al-bar.dur-12 { transition-duration: 12.0s; }
+.al-bar.dur-13 { transition-duration: 13.0s; }
+.al-bar.dur-14 { transition-duration: 14.0s; }
+.al-bar.dur-15 { transition-duration: 15.0s; }
+.al-bar.dur-16 { transition-duration: 16.0s; }
+.al-bar.dur-17 { transition-duration: 17.0s; }
+.al-bar.dur-18 { transition-duration: 18.0s; }
+.al-bar.dur-19 { transition-duration: 19.0s; }
+.al-bar.dur-20 { transition-duration: 20.0s; }
+.al-bar.dur-21 { transition-duration: 21.0s; }
+.al-bar.dur-22 { transition-duration: 22.0s; }
+.al-bar.dur-23 { transition-duration: 23.0s; }
+.al-bar.dur-24 { transition-duration: 24.0s; }
+.al-bar.dur-25 { transition-duration: 25.0s; }
+.al-bar.dur-26 { transition-duration: 26.0s; }
+.al-bar.dur-27 { transition-duration: 27.0s; }
+.al-bar.dur-28 { transition-duration: 28.0s; }
+.al-bar.dur-29 { transition-duration: 29.0s; }
+.al-bar.dur-30 { transition-duration: 30.0s; }
+.al-bar.dur-31 { transition-duration: 31.0s; }
+.al-bar.dur-32 { transition-duration: 32.0s; }
+.al-bar.dur-33 { transition-duration: 33.0s; }
+.al-bar.dur-34 { transition-duration: 34.0s; }
+.al-bar.dur-35 { transition-duration: 35.0s; }
+.al-bar.dur-36 { transition-duration: 36.0s; }
+.al-bar.dur-37 { transition-duration: 37.0s; }
+.al-bar.dur-38 { transition-duration: 38.0s; }
+.al-bar.dur-39 { transition-duration: 39.0s; }
+.al-bar.dur-40 { transition-duration: 40.0s; }
+.al-bar.dur-41 { transition-duration: 41.0s; }
+.al-bar.dur-42 { transition-duration: 42.0s; }
+.al-bar.dur-43 { transition-duration: 43.0s; }
+.al-bar.dur-44 { transition-duration: 44.0s; }
+.al-bar.dur-45 { transition-duration: 45.0s; }
+.al-bar.dur-46 { transition-duration: 46.0s; }
+.al-bar.dur-47 { transition-duration: 47.0s; }
+.al-bar.dur-48 { transition-duration: 48.0s; }
+.al-bar.dur-49 { transition-duration: 49.0s; }
+.al-bar.dur-50 { transition-duration: 50.0s; }
+.al-bar.dur-51 { transition-duration: 51.0s; }
+.al-bar.dur-52 { transition-duration: 52.0s; }
+.al-bar.dur-53 { transition-duration: 53.0s; }
+.al-bar.dur-54 { transition-duration: 54.0s; }
+.al-bar.dur-55 { transition-duration: 55.0s; }
+.al-bar.dur-56 { transition-duration: 56.0s; }
+.al-bar.dur-57 { transition-duration: 57.0s; }
+.al-bar.dur-58 { transition-duration: 58.0s; }
+.al-bar.dur-59 { transition-duration: 59.0s; }
+.al-bar.dur-60 { transition-duration: 60.0s; }
+.al-bar.dur-65 { transition-duration: 65.0s; }
+.al-bar.dur-70 { transition-duration: 70.0s; }
+.al-bar.dur-75 { transition-duration: 75.0s; }
+.al-bar.dur-80 { transition-duration: 80.0s; }
+.al-bar.dur-85 { transition-duration: 85.0s; }
+.al-bar.dur-90 { transition-duration: 90.0s; }
+.al-bar.dur-95 { transition-duration: 95.0s; }
+.al-bar.dur-100 { transition-duration: 100.0s; }
+.al-bar.dur-105 { transition-duration: 105.0s; }
+.al-bar.dur-110 { transition-duration: 110.0s; }
+.al-bar.dur-115 { transition-duration: 115.0s; }
+.al-bar.dur-120 { transition-duration: 120.0s; }
+.al-bar.dur-125 { transition-duration: 125.0s; }
+.al-bar.dur-130 { transition-duration: 130.0s; }
+.al-bar.dur-135 { transition-duration: 135.0s; }
+.al-bar.dur-140 { transition-duration: 140.0s; }
+.al-bar.dur-145 { transition-duration: 145.0s; }
+.al-bar.dur-150 { transition-duration: 150.0s; }
+.al-bar.dur-155 { transition-duration: 155.0s; }
+.al-bar.dur-160 { transition-duration: 160.0s; }
+.al-bar.dur-165 { transition-duration: 165.0s; }
+.al-bar.dur-170 { transition-duration: 170.0s; }
+.al-bar.dur-175 { transition-duration: 175.0s; }
+.al-bar.dur-180 { transition-duration: 180.0s; }
+
+/* After the at-N ladder, so it wins over any of them: same specificity, later rule. */
+.al-bar.run { clip: rect( 0%, 0%, 100%, 0% ); }
+
+/* ------------------------------------------------------------------ states */
+
+/* The last 3 seconds */
+.al.st-last { border-top-color: #e8543f; }
+.al.st-last .al-icon    { wash-color: #e8543f; }
+.al.st-last .al-eyebrow { color: #e8543f; }
+.al.st-last .al-n       { color: #e8543f; }
+.al.st-last .al-bar     { background-color: #e8543f; }
+
+/* Back in the game */
+.al.st-ok { border-top-color: #4caf6d; }
+.al.st-ok .al-icon {
+    background-image: url("s2r://panorama/images/icons/ui/check.vsvg");
+    wash-color: #4caf6d;
+}
+.al.st-ok .al-eyebrow { color: #4caf6d; }
+
+/* Moved to spectators */
+.al.st-moved { border-top-color: #8b939c; }
+.al.st-moved .al-icon {
+    background-image: url("s2r://panorama/images/icons/ui/switch_teams_dead.vsvg");
+    wash-color: #8b939c;
+}
+.al.st-moved .al-eyebrow { color: #8b939c; }
+.al.st-moved .al-keys    { visibility: visible; }
+
+/* Only the countdown has a number and a bar; "Back" has no second line, "Moved" has the keys instead. */
+.al.st-ok .al-num,
+.al.st-moved .al-num,
+.al.st-ok .al-track,
+.al.st-moved .al-track,
+.al.st-ok .al-sub,
+.al.st-moved .al-sub { visibility: collapse; }

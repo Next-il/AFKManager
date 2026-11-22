@@ -1,4 +1,5 @@
-﻿using CounterStrikeSharp.API;
+﻿using System.Text.Json.Serialization;
+using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Admin;
@@ -33,9 +34,14 @@ public class AFKManagerConfig : BasePluginConfig
     public bool AntiCampSkipBombPlanted { get; set; } = true;
     public int AntiCampSkipTeam { get; set; } = 3;
     public float Timer { get; set; } = 5.0f;
+
+    // Optional: a config without it gets the defaults (AFKManager.Hud.cs). Not written back - CSS only
+    // writes the file when there is none, and nothing here bumps ConfigVersion.
+    [JsonPropertyName("Hud")]
+    public AFKManagerHudConfig Hud { get; set; } = new();
 }
 
-public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
+public partial class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
 {
     #region definitions
     public override string ModuleAuthor => "NiGHT & K4ryuu (forked by Глеб Хлебов)";
@@ -93,6 +99,11 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         public bool MovedByPlugin { get; set; }
         public float AntiCampTime { get; set; }
         public int AntiCampWarningCount { get; set; }
+
+        // For the HUD (AFKManager.Hud.cs): when the timer last saw the player somewhere else, or they spawned,
+        // and when they last spawned (the position sample is retaken 0.2s later).
+        public float IdleSince { get; set; }
+        public float SpawnedAt { get; set; } = -1000;
     }
     
     private readonly Dictionary<uint, PlayerInfo> _gPlayerInfo = new();
@@ -114,6 +125,7 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         RegisterListener<Listeners.OnMapEnd>(() =>
         {
             _gPlayerInfo.Clear();
+            _hud?.Clear();
         });
         
         #region OnClientConnected
@@ -133,6 +145,7 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         RegisterListener<Listeners.OnClientDisconnectPost>(playerSlot =>
         {
             _gPlayerInfo.Remove((uint)playerSlot + 1);
+            _hud?.OnDisconnect(playerSlot);
         });
         #endregion
         #region hotReload
@@ -140,7 +153,7 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         {
             AddTimer(1.0f, () =>
             {
-                var players = Utilities.GetPlayers().Where(x => x is { IsBot: false, Connected: PlayerConnectedState.PlayerConnected });
+                var players = Utilities.GetPlayers().Where(x => x is { IsBot: false, Connected: PlayerConnectedState.Connected });
 
                 foreach (var player in players)
                 {
@@ -164,6 +177,8 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         #endregion
         AddCommandListener("spec_mode", OnCommandListener);
         AddCommandListener("spec_next", OnCommandListener);
+
+        HudLoad();
     }
 
     private HookResult OnCommandListener(CCSPlayerController? player, CommandInfo commandInfo)
@@ -208,6 +223,9 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
         if (player == null || !player.IsValid || player.IsBot)
             return HookResult.Continue;
 
+        if (_gPlayerInfo.TryGetValue(player.Index, out var spawned))
+            spawned.SpawnedAt = Server.CurrentTime;
+
         AddTimer(0.2f, () =>
         {
             if (player == null || !player.IsValid || player.LifeState != (byte)LifeState_t.LIFE_ALIVE)
@@ -236,6 +254,7 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
             data.MovedByPlugin = false;
             data.AntiCampWarningCount = 0;
             data.AntiCampTime = 0;
+            data.IdleSince = Server.CurrentTime;
         }, TimerFlags.STOP_ON_MAPCHANGE);
             
         return HookResult.Continue;
@@ -243,10 +262,13 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
     
     private void AfkTimer_Callback()
     {
+        // Before the freeze-time return: the HUD needs the timer's rhythm, not only its working ticks
+        _lastTickAt = Server.CurrentTime;
+
         if (_gGameRulesProxy == null || _gGameRulesProxy.FreezePeriod || (Config.SkipWarmup && _gGameRulesProxy.WarmupPeriod))
             return;
 
-        var players = Utilities.GetPlayers().Where(x => x is { IsBot: false, Connected: PlayerConnectedState.PlayerConnected }).ToList();
+        var players = Utilities.GetPlayers().Where(x => x is { IsBot: false, Connected: PlayerConnectedState.Connected }).ToList();
         var playersCount = players.Count;
         
         foreach (var player in players)
@@ -296,9 +318,13 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                                 {
                                     RemoveC4(weaponService, weapon);
                                     nearestPlayer.GiveNamedItem("weapon_c4");
-                                    Server.PrintToChatAll(ReplaceVars(player,
+                                    var bombLine = ReplaceVars(player,
                                         Localizer["ChatBombTransfer"].Value
-                                            .Replace("{targetPlayerName}", nearestPlayer.PlayerName)));
+                                            .Replace("{targetPlayerName}", nearestPlayer.PlayerName));
+
+                                    // A toast to the Terrorists when the HUD is on; the line to all otherwise
+                                    if (!HudBombToast(player, nearestPlayer, bombLine))
+                                        Server.PrintToChatAll(bombLine);
                                 }
                             }
                         }
@@ -314,11 +340,20 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                                 
                                 break;
                             case 1:
-                                Server.PrintToChatAll(ReplaceVars(player, Localizer["ChatMoveMessage"].Value));
+                                var moveLine = ReplaceVars(player, Localizer["ChatMoveMessage"].Value);
+                                var idleSeconds = IdleSeconds(data, Server.CurrentTime);
+
+                                if (!HudOn)
+                                    Server.PrintToChatAll(moveLine);
+
                                 playerPawn?.CommitSuicide(false, true);
                                 player.ChangeTeam(CsTeam.Spectator);
                                 data.MovedByPlugin = true;
-                                
+
+                                // After the team change, so its events can't take the new card down
+                                if (HudOn)
+                                    HudMoved(player, moveLine, idleSeconds);
+
                                 break;
                             case 2:
                                 Server.PrintToChatAll(ReplaceVars(player, Localizer["ChatKickMessage"].Value));
@@ -340,7 +375,9 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                         break;
 
                         case 1:
-                            player.PrintToChat(ReplaceVars(player, Localizer["ChatWarningMoveMessage"].Value, Config.AfkPunishAfterWarnings * Config.AfkWarnInterval - data.AfkWarningCount * Config.AfkWarnInterval));
+                            // The AFK card when the HUD is on; the chat line otherwise, or when the card can't reach them
+                            if (!HudWarn(player, data))
+                                player.PrintToChat(ReplaceVars(player, Localizer["ChatWarningMoveMessage"].Value, Config.AfkPunishAfterWarnings * Config.AfkWarnInterval - data.AfkWarningCount * Config.AfkWarnInterval));
                             break;
 
                         case 2:
@@ -358,6 +395,8 @@ public class AFKManager : BasePlugin, IPluginConfig<AFKManagerConfig>
                 {
                     data.AfkTime = 0;
                     data.AfkWarningCount = 0;
+                    data.IdleSince = Server.CurrentTime;
+                    HudBack(player);
                 }
                 /*  ------------------------------------------->  <-------------------------------------------  */
                 if (data.AfkWarningCount == 0 && Config.AntiCampPunishAfterWarnings != 0

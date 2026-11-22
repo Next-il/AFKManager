@@ -28,9 +28,28 @@ Config File located in **/addons/counterstrikesharp/configs/plugins/AFKManager**
   - AntiCampSkipBombPlanted: Skip camping checks if the bomb is planted (set to true to enable).
   - AntiCampSkipTeam: Skip camping checks for a specific team (2 - Terrorists, 3 - Counter-Terrorists).
   - Timer: Adjust the timer for player checks.
+  - Hud.Enabled: Show the AFK warning as a HUD card instead of chat (default = true). false brings every old chat line back.
+  - Hud.OthersToast: Tell the other players "X moved to spectators" with a toast (default = true). false shows them nothing.
+
+# HUD (Next fork):
+With AfkPunishment 1 (move to spectator), the AFK player gets a private card in the lower middle of the screen
+instead of the warning in chat: a countdown to the real move time, a bar that drains over it, "Back" when they
+move, and "Moved to spectators" after. Everyone else gets one toast through ToastService instead of the chat
+line, and the bomb transfer line becomes a toast to the Terrorists only.
+
+The layout is `hud/panorama/layout/custom_game/afk_hud.xml` with `afk_hud.css` and `hud_shared.css`. It has to
+be in the workshop addon the clients mount; without it the card is invisible, so ship the addon first or set
+Hud.Enabled to false. The kill and kick punishments, the spectator kick and anti-camp keep their chat lines.
+
+Both Hud keys are optional - a config file without them gets the defaults, and the plugin never writes the file:
+
+```json
+"Hud": { "Enabled": true, "OthersToast": true }
+```
 
 # Requirements:
-[CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp)
+[CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp) 1.0.374 or newer. PanoramaManager.dll ships beside the plugin.
+Optional: ToastService (with `shared/PanoramaManager.Toasts.Api/`) for the toasts; without it those lines stay in chat.
 
 # Credits:
 [K4ryuu](https://github.com/K4ryuu) - Helping with config file and other things before CSS's config implementation.

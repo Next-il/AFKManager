@@ -1,0 +1,67 @@
+<root>
+	<styles>
+		<include src="s2r://panorama/styles/custom_game/hud_shared.vcss_c" />
+		<include src="s2r://panorama/styles/custom_game/afk_hud.vcss_c" />
+	</styles>
+
+	<!--
+		AFK HUD - one private center card for the AFK player, lower middle (top 640), under the crosshair.
+
+		  st-afk     "AFK / Move or go to spectators / You haven't moved for N seconds", a big countdown
+		             and a 2px bar draining over it                   (was "You're Idle/AFK. Move or
+		                                                               you'll be moved to SPEC in N
+		                                                               seconds" in chat every warning)
+		  st-last    the same, red, for the last 3 seconds
+		  st-ok      "Back / You're back in the game", green, about 1.5s
+		  st-moved   "Moved to spectators / You were AFK / Press M to pick a team", grey, 4s
+		             (with a toast to everyone else through ToastService, instead of the chat line)
+
+		NOT INTERACTIVE. hittest false everywhere; the plugin opens it with CaptureInput = false.
+
+		CONTRACT (AFKManager/Hud/AfkHud.cs must match)
+		  RootPanelId  = "AfkRoot"   RevealClass = "show"   RowCount = 0
+		  CaptureInput = false       HideHud = None         SharedText = false
+
+		The root is full-screen and carries nothing visible itself; it is opened once per player and
+		stays open. The card has its own "show", and "hidden" (collapse) while it is not in use.
+
+		DIALOG VARIABLES
+		  afk_eyebrow afk_title afk_sub afk_n afk_keys_a afk_keys_b
+
+		CLASSES THE SERVER TOGGLES
+		  afk_card   show hidden | st-afk st-last st-ok st-moved
+		  afk_n      pop-a pop-b                     (ping-pong, once a second in the last 3)
+		  afk_bar    at-0..at-20                     where the bar starts, in 5% steps (at-20 = full)
+		             dur-1..dur-60, dur-65..dur-180  how long it drains for (5s steps above 60)
+		             run                             drain to 0, one linear clip transition
+	-->
+	<Panel class="hud-screen" hittest="false">
+		<Panel id="AfkRoot" class="afk-root" hittest="false">
+
+			<Panel id="afk_card" class="al st-afk hidden" hittest="false">
+				<Panel class="al-row" hittest="false">
+					<Panel class="al-icon" hittest="false" />
+					<Panel class="al-main" hittest="false">
+						<Label class="al-eyebrow" hittest="false" text="{s:afk_eyebrow}" />
+						<Label class="al-title" hittest="false" text="{s:afk_title}" />
+						<Label class="al-sub" hittest="false" text="{s:afk_sub}" />
+						<!-- moved: "Press [M] to pick a team" as labels, since a Label has no spans -->
+						<Panel class="al-keys" hittest="false">
+							<Label class="al-keytxt" hittest="false" text="{s:afk_keys_a}" />
+							<Label class="al-key" hittest="false" text="M" />
+							<Label class="al-keytxt" hittest="false" text="{s:afk_keys_b}" />
+						</Panel>
+					</Panel>
+					<Panel class="al-num" hittest="false">
+						<Label id="afk_n" class="al-n" hittest="false" text="{s:afk_n}" />
+						<Label class="al-s" hittest="false" text="s" />
+					</Panel>
+				</Panel>
+				<Panel class="al-track" hittest="false">
+					<Panel id="afk_bar" class="al-bar" hittest="false" />
+				</Panel>
+			</Panel>
+
+		</Panel>
+	</Panel>
+</root>

@@ -10,5 +10,19 @@
   "AntiCampSlayMessage": "{grey}{playerName}{default} was {lime}slayed{default} for camping in {green}@{zoneName}{default} with weapon {lime}{weaponName}{default}.",
   "AntiCampSlapMessage": "{grey}{playerName}{default} was {lime}slapped{default} with {red}{slapAmount} damage{default} for camping in {green}@{zoneName}{default} with weapon {lime}{weaponName}{default}.",
   "AntiCampSlayWarningMessage": "Stop camping in {green}@{zoneName}{default} with weapon {lime}{weaponName}{default} or you'll be {lime}slayed{default} in {lightblue}{timeAmount}{default} seconds.",
-  "AntiCampSlapWarningMessage": "Stop camping in {green}@{zoneName}{default} with weapon {lime}{weaponName}{default} or you'll be {lime}slapped{default} with {red}{slapAmount} damage{default} in {lightblue}{timeAmount}{default} seconds."
+  "AntiCampSlapWarningMessage": "Stop camping in {green}@{zoneName}{default} with weapon {lime}{weaponName}{default} or you'll be {lime}slapped{default} with {red}{slapAmount} damage{default} in {lightblue}{timeAmount}{default} seconds.",
+
+  "Hud.Afk.Eyebrow": "AFK",
+  "Hud.Afk.Title": "Move or go to spectators",
+  "Hud.Afk.Sub": "You haven't moved for {0} seconds.",
+  "Hud.Back.Eyebrow": "Back",
+  "Hud.Back.Title": "You're back in the game",
+  "Hud.Moved.Eyebrow": "Moved to spectators",
+  "Hud.Moved.Title": "You were AFK",
+  "Hud.Moved.KeysBefore": "Press",
+  "Hud.Moved.KeysAfter": "to pick a team.",
+  "Hud.Toast.Moved.Title": "{0} moved to spectators",
+  "Hud.Toast.Moved.Description": "AFK for {0} seconds",
+  "Hud.Toast.Bomb.Title": "Bomb passed to {0}",
+  "Hud.Toast.Bomb.Description": "{0} is AFK"
 }
