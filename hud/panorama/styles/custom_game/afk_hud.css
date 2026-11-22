@@ -8,11 +8,11 @@
     with a fade and a blur, and leaves the same way when "show" comes off. The accent is gold while
     the countdown runs, red for the last 3 seconds, green for "Back", grey for "Moved to spectators".
 
-    THE BAR is one linear clip transition, not a stepped ladder. The plugin picks where it starts
-    (at-N, in 5% steps, for a countdown that is picked up halfway, like after a respawn) with no
-    duration on, so it snaps there; a moment later it adds dur-N and "run" together and the client
-    drains it to 0 on its own. Clearing dur-N before "run" makes the reset snap instead of running
-    backwards - the same rule ToastService follows. clip survives the countdown label being
+    THE BAR is a clip ladder with one fixed glide: s0..s50 (2% a step) and a 0.3s linear transition
+    that no class changes. The plugin names the step for where the countdown will be one glide from
+    now, every 0.2s, so the fill keeps moving between steps. It replaced one long transition per
+    countdown (snap to at-N, then dur-N and "run" together), which did not draw in game: nothing has
+    shown a class-swapped transition-duration working there. clip survives the countdown label being
     rewritten every second; width would not (runtime-behaviour.md).
 
     UNVERIFIED IN GAME, each with a harmless failure:
@@ -40,7 +40,7 @@
     width: 352px;
     border-top: 2px solid #f0a531;
     world-blur: gaussian(8.0);
-    background-color: gradient(linear, 0% 0%, 0% 100%, from(#12171ee2), to(#0b0f14ec));
+    background-color: gradient(linear, 0% 0%, 0% 100%, from(#12171ec6), to(#0b0f14d0));
 
     opacity: 0;
     blur: gaussian(7.0);
@@ -182,128 +182,73 @@
     height: 2px;
     vertical-align: bottom;
 }
-/* Zero by default, so taking "run" and the dur-N class off snaps it back instead of animating. */
+/*
+    s0..s50 (2% a step, s50 full) on a clip with ONE fixed 0.3s linear glide, which no class changes.
+    The plugin names a step every 0.2s, aimed one glide ahead of the clock, so the fill keeps moving
+    between steps and reaches s0 as the countdown does. Full by default: a card drawn before any step
+    is written shows a full bar.
+*/
 .al-bar {
     width: 100%;
     height: 100%;
     background-color: #f0a531;
     clip: rect( 0%, 100%, 100%, 0% );
     transition-property: clip;
-    transition-duration: 0.0s;
+    transition-duration: 0.3s;
     transition-timing-function: linear;
 }
 
-/* Where it starts. */
-.al-bar.at-0 { clip: rect( 0%, 0%, 100%, 0% ); }
-.al-bar.at-1 { clip: rect( 0%, 5%, 100%, 0% ); }
-.al-bar.at-2 { clip: rect( 0%, 10%, 100%, 0% ); }
-.al-bar.at-3 { clip: rect( 0%, 15%, 100%, 0% ); }
-.al-bar.at-4 { clip: rect( 0%, 20%, 100%, 0% ); }
-.al-bar.at-5 { clip: rect( 0%, 25%, 100%, 0% ); }
-.al-bar.at-6 { clip: rect( 0%, 30%, 100%, 0% ); }
-.al-bar.at-7 { clip: rect( 0%, 35%, 100%, 0% ); }
-.al-bar.at-8 { clip: rect( 0%, 40%, 100%, 0% ); }
-.al-bar.at-9 { clip: rect( 0%, 45%, 100%, 0% ); }
-.al-bar.at-10 { clip: rect( 0%, 50%, 100%, 0% ); }
-.al-bar.at-11 { clip: rect( 0%, 55%, 100%, 0% ); }
-.al-bar.at-12 { clip: rect( 0%, 60%, 100%, 0% ); }
-.al-bar.at-13 { clip: rect( 0%, 65%, 100%, 0% ); }
-.al-bar.at-14 { clip: rect( 0%, 70%, 100%, 0% ); }
-.al-bar.at-15 { clip: rect( 0%, 75%, 100%, 0% ); }
-.al-bar.at-16 { clip: rect( 0%, 80%, 100%, 0% ); }
-.al-bar.at-17 { clip: rect( 0%, 85%, 100%, 0% ); }
-.al-bar.at-18 { clip: rect( 0%, 90%, 100%, 0% ); }
-.al-bar.at-19 { clip: rect( 0%, 95%, 100%, 0% ); }
-.al-bar.at-20 { clip: rect( 0%, 100%, 100%, 0% ); }
-
-/* How long it drains for: every second to 60, then every 5 to 180. The plugin snaps to the nearest. */
-.al-bar.dur-1 { transition-duration: 1.0s; }
-.al-bar.dur-2 { transition-duration: 2.0s; }
-.al-bar.dur-3 { transition-duration: 3.0s; }
-.al-bar.dur-4 { transition-duration: 4.0s; }
-.al-bar.dur-5 { transition-duration: 5.0s; }
-.al-bar.dur-6 { transition-duration: 6.0s; }
-.al-bar.dur-7 { transition-duration: 7.0s; }
-.al-bar.dur-8 { transition-duration: 8.0s; }
-.al-bar.dur-9 { transition-duration: 9.0s; }
-.al-bar.dur-10 { transition-duration: 10.0s; }
-.al-bar.dur-11 { transition-duration: 11.0s; }
-.al-bar.dur-12 { transition-duration: 12.0s; }
-.al-bar.dur-13 { transition-duration: 13.0s; }
-.al-bar.dur-14 { transition-duration: 14.0s; }
-.al-bar.dur-15 { transition-duration: 15.0s; }
-.al-bar.dur-16 { transition-duration: 16.0s; }
-.al-bar.dur-17 { transition-duration: 17.0s; }
-.al-bar.dur-18 { transition-duration: 18.0s; }
-.al-bar.dur-19 { transition-duration: 19.0s; }
-.al-bar.dur-20 { transition-duration: 20.0s; }
-.al-bar.dur-21 { transition-duration: 21.0s; }
-.al-bar.dur-22 { transition-duration: 22.0s; }
-.al-bar.dur-23 { transition-duration: 23.0s; }
-.al-bar.dur-24 { transition-duration: 24.0s; }
-.al-bar.dur-25 { transition-duration: 25.0s; }
-.al-bar.dur-26 { transition-duration: 26.0s; }
-.al-bar.dur-27 { transition-duration: 27.0s; }
-.al-bar.dur-28 { transition-duration: 28.0s; }
-.al-bar.dur-29 { transition-duration: 29.0s; }
-.al-bar.dur-30 { transition-duration: 30.0s; }
-.al-bar.dur-31 { transition-duration: 31.0s; }
-.al-bar.dur-32 { transition-duration: 32.0s; }
-.al-bar.dur-33 { transition-duration: 33.0s; }
-.al-bar.dur-34 { transition-duration: 34.0s; }
-.al-bar.dur-35 { transition-duration: 35.0s; }
-.al-bar.dur-36 { transition-duration: 36.0s; }
-.al-bar.dur-37 { transition-duration: 37.0s; }
-.al-bar.dur-38 { transition-duration: 38.0s; }
-.al-bar.dur-39 { transition-duration: 39.0s; }
-.al-bar.dur-40 { transition-duration: 40.0s; }
-.al-bar.dur-41 { transition-duration: 41.0s; }
-.al-bar.dur-42 { transition-duration: 42.0s; }
-.al-bar.dur-43 { transition-duration: 43.0s; }
-.al-bar.dur-44 { transition-duration: 44.0s; }
-.al-bar.dur-45 { transition-duration: 45.0s; }
-.al-bar.dur-46 { transition-duration: 46.0s; }
-.al-bar.dur-47 { transition-duration: 47.0s; }
-.al-bar.dur-48 { transition-duration: 48.0s; }
-.al-bar.dur-49 { transition-duration: 49.0s; }
-.al-bar.dur-50 { transition-duration: 50.0s; }
-.al-bar.dur-51 { transition-duration: 51.0s; }
-.al-bar.dur-52 { transition-duration: 52.0s; }
-.al-bar.dur-53 { transition-duration: 53.0s; }
-.al-bar.dur-54 { transition-duration: 54.0s; }
-.al-bar.dur-55 { transition-duration: 55.0s; }
-.al-bar.dur-56 { transition-duration: 56.0s; }
-.al-bar.dur-57 { transition-duration: 57.0s; }
-.al-bar.dur-58 { transition-duration: 58.0s; }
-.al-bar.dur-59 { transition-duration: 59.0s; }
-.al-bar.dur-60 { transition-duration: 60.0s; }
-.al-bar.dur-65 { transition-duration: 65.0s; }
-.al-bar.dur-70 { transition-duration: 70.0s; }
-.al-bar.dur-75 { transition-duration: 75.0s; }
-.al-bar.dur-80 { transition-duration: 80.0s; }
-.al-bar.dur-85 { transition-duration: 85.0s; }
-.al-bar.dur-90 { transition-duration: 90.0s; }
-.al-bar.dur-95 { transition-duration: 95.0s; }
-.al-bar.dur-100 { transition-duration: 100.0s; }
-.al-bar.dur-105 { transition-duration: 105.0s; }
-.al-bar.dur-110 { transition-duration: 110.0s; }
-.al-bar.dur-115 { transition-duration: 115.0s; }
-.al-bar.dur-120 { transition-duration: 120.0s; }
-.al-bar.dur-125 { transition-duration: 125.0s; }
-.al-bar.dur-130 { transition-duration: 130.0s; }
-.al-bar.dur-135 { transition-duration: 135.0s; }
-.al-bar.dur-140 { transition-duration: 140.0s; }
-.al-bar.dur-145 { transition-duration: 145.0s; }
-.al-bar.dur-150 { transition-duration: 150.0s; }
-.al-bar.dur-155 { transition-duration: 155.0s; }
-.al-bar.dur-160 { transition-duration: 160.0s; }
-.al-bar.dur-165 { transition-duration: 165.0s; }
-.al-bar.dur-170 { transition-duration: 170.0s; }
-.al-bar.dur-175 { transition-duration: 175.0s; }
-.al-bar.dur-180 { transition-duration: 180.0s; }
-
-/* After the at-N ladder, so it wins over any of them: same specificity, later rule. */
-.al-bar.run { clip: rect( 0%, 0%, 100%, 0% ); }
+.al-bar.s0 { clip: rect( 0%, 0%, 100%, 0% ); }
+.al-bar.s1 { clip: rect( 0%, 2%, 100%, 0% ); }
+.al-bar.s2 { clip: rect( 0%, 4%, 100%, 0% ); }
+.al-bar.s3 { clip: rect( 0%, 6%, 100%, 0% ); }
+.al-bar.s4 { clip: rect( 0%, 8%, 100%, 0% ); }
+.al-bar.s5 { clip: rect( 0%, 10%, 100%, 0% ); }
+.al-bar.s6 { clip: rect( 0%, 12%, 100%, 0% ); }
+.al-bar.s7 { clip: rect( 0%, 14%, 100%, 0% ); }
+.al-bar.s8 { clip: rect( 0%, 16%, 100%, 0% ); }
+.al-bar.s9 { clip: rect( 0%, 18%, 100%, 0% ); }
+.al-bar.s10 { clip: rect( 0%, 20%, 100%, 0% ); }
+.al-bar.s11 { clip: rect( 0%, 22%, 100%, 0% ); }
+.al-bar.s12 { clip: rect( 0%, 24%, 100%, 0% ); }
+.al-bar.s13 { clip: rect( 0%, 26%, 100%, 0% ); }
+.al-bar.s14 { clip: rect( 0%, 28%, 100%, 0% ); }
+.al-bar.s15 { clip: rect( 0%, 30%, 100%, 0% ); }
+.al-bar.s16 { clip: rect( 0%, 32%, 100%, 0% ); }
+.al-bar.s17 { clip: rect( 0%, 34%, 100%, 0% ); }
+.al-bar.s18 { clip: rect( 0%, 36%, 100%, 0% ); }
+.al-bar.s19 { clip: rect( 0%, 38%, 100%, 0% ); }
+.al-bar.s20 { clip: rect( 0%, 40%, 100%, 0% ); }
+.al-bar.s21 { clip: rect( 0%, 42%, 100%, 0% ); }
+.al-bar.s22 { clip: rect( 0%, 44%, 100%, 0% ); }
+.al-bar.s23 { clip: rect( 0%, 46%, 100%, 0% ); }
+.al-bar.s24 { clip: rect( 0%, 48%, 100%, 0% ); }
+.al-bar.s25 { clip: rect( 0%, 50%, 100%, 0% ); }
+.al-bar.s26 { clip: rect( 0%, 52%, 100%, 0% ); }
+.al-bar.s27 { clip: rect( 0%, 54%, 100%, 0% ); }
+.al-bar.s28 { clip: rect( 0%, 56%, 100%, 0% ); }
+.al-bar.s29 { clip: rect( 0%, 58%, 100%, 0% ); }
+.al-bar.s30 { clip: rect( 0%, 60%, 100%, 0% ); }
+.al-bar.s31 { clip: rect( 0%, 62%, 100%, 0% ); }
+.al-bar.s32 { clip: rect( 0%, 64%, 100%, 0% ); }
+.al-bar.s33 { clip: rect( 0%, 66%, 100%, 0% ); }
+.al-bar.s34 { clip: rect( 0%, 68%, 100%, 0% ); }
+.al-bar.s35 { clip: rect( 0%, 70%, 100%, 0% ); }
+.al-bar.s36 { clip: rect( 0%, 72%, 100%, 0% ); }
+.al-bar.s37 { clip: rect( 0%, 74%, 100%, 0% ); }
+.al-bar.s38 { clip: rect( 0%, 76%, 100%, 0% ); }
+.al-bar.s39 { clip: rect( 0%, 78%, 100%, 0% ); }
+.al-bar.s40 { clip: rect( 0%, 80%, 100%, 0% ); }
+.al-bar.s41 { clip: rect( 0%, 82%, 100%, 0% ); }
+.al-bar.s42 { clip: rect( 0%, 84%, 100%, 0% ); }
+.al-bar.s43 { clip: rect( 0%, 86%, 100%, 0% ); }
+.al-bar.s44 { clip: rect( 0%, 88%, 100%, 0% ); }
+.al-bar.s45 { clip: rect( 0%, 90%, 100%, 0% ); }
+.al-bar.s46 { clip: rect( 0%, 92%, 100%, 0% ); }
+.al-bar.s47 { clip: rect( 0%, 94%, 100%, 0% ); }
+.al-bar.s48 { clip: rect( 0%, 96%, 100%, 0% ); }
+.al-bar.s49 { clip: rect( 0%, 98%, 100%, 0% ); }
+.al-bar.s50 { clip: rect( 0%, 100%, 100%, 0% ); }
 
 /* ------------------------------------------------------------------ states */
 
