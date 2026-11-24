@@ -14,7 +14,7 @@
 
     <!-- The AFK card (Hud/AfkHud.cs). Copied next to the plugin by CopyPanoramaManager below: each
          CounterStrikeSharp plugin loads from its own folder. Same version as our other HUD plugins. -->
-    <PackageReference Include="PanoramaManager" Version="0.4.3" />
+    <PackageReference Include="PanoramaManager" Version="0.4.5" />
 
     <!-- Optional dependency, for the "moved to spectators" and bomb toasts (Hud/ToastBridge.cs). Compile-time
          only, and absent at runtime on a server without ToastService. The copy in lib/ is the same build as
